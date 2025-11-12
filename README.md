@@ -6,7 +6,7 @@
 ...
 
 ```bash
-go get github.com/yousef-muc/token-captcha@vX.Y.Z
+go get github.com/yousef-muc/token-captcha@v0.2.1
 ```
 
 ## Documentation
