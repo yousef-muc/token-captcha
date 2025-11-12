@@ -1,0 +1,71 @@
+# Releases & Versioning
+
+# **Workflow `release.yml`** triggers on merge to `main`
+# Determines the **latest tag version**, bumps **patch/minor/major** based on the commit log
+# **Updates README** replaces version in the install line
+# Commit + **push new tag** (`vX.Y.Z`) + create **GitHub release**
+
+name: Release
+on:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Calc next version
+        id: ver
+        run: |
+          last=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+          if [ -z "$last" ]; then last="v0.1.0"; fi
+          major=${last#v}; major=${major%%.*}
+          minor=${last#v$major.}; minor=${minor%%.*}
+          patch=${last#v$major.$minor.}
+          # Simple rule: if commit messages since last tag contain "feat:", bump minor; if "BREAKING CHANGE" bump major; else bump patch
+          log=$(git log --pretty=format:%s ${last}..HEAD || true)
+          if echo "$log" | grep -q "BREAKING CHANGE"; then
+            major=$((major+1)); minor=0; patch=0
+          elif echo "$log" | grep -qE "feat(\(.*\))?: "; then
+            minor=$((minor+1)); patch=0
+          else
+            patch=$((patch+1))
+          fi
+          echo "next=v${major}.${minor}.${patch}" >> $GITHUB_OUTPUT
+
+      - name: Update README install line
+        run: |
+          new="${{ steps.ver.outputs.next }}"
+          sed -i -E "s#(go get github.com/yousef-muc/token-captcha@)v[0-9]+\.[0-9]+\.[0-9]+#\1${new}#g" README.md
+          if ! git diff --quiet; then
+            git config user.name "github-actions"
+            git config user.email "actions@users.noreply.github.com"
+            git add README.md
+            git commit -m "docs: bump install line to ${new}"
+          fi
+
+      - name: Create tag
+        run: |
+          new="${{ steps.ver.outputs.next }}"
+          git tag -a "${new}" -m "Release ${new}"
+          git push --follow-tags
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.next }}
+          generate_release_notes: true

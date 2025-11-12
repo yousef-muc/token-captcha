@@ -5,8 +5,8 @@
 ### Installation
 ...
 
-```
-$ go get github.com/yousef-muc/token-captcha
+```bash
+go get github.com/yousef-muc/token-captcha@vX.Y.Z
 ```
 
 ## Documentation
