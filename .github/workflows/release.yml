@@ -13,8 +13,9 @@ jobs:
   release:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout main at merge commit
+      - name: Checkout merge commit
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -25,12 +26,10 @@ jobs:
         with:
           go-version: '1.23'
 
-      - name: Calc next version
+      - name: Calculate next version
         id: ver
         run: |
           set -euo pipefail
-
-          # Last tag, if any
           last=$(git tag --list 'v*' --sort=-v:refname | head -n1 || true)
 
           if [ -z "${last:-}" ]; then
@@ -73,21 +72,26 @@ jobs:
 
       - name: Update README install line + commit
         if: steps.ver.outputs.no_changes != 'true'
+        env:
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
         run: |
+          set -euo pipefail
           new="${{ steps.ver.outputs.next }}"
           sed -i -E "s#(go get github.com/yousef-muc/token-captcha@)(v[0-9]+\.[0-9]+\.[0-9]+|vX\.Y\.Z)#\1${new}#g" README.md
 
-          if ! git diff --quiet; then
+          if ! git diff --quiet -- README.md; then
+            git config --global --add safe.directory "$GITHUB_WORKSPACE"
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add README.md
             git commit -m "docs: bump install line to ${new}"
-            git push origin HEAD
+            git push origin HEAD:refs/heads/${BASE_BRANCH}
           fi
 
       - name: Create tag and push
         if: steps.ver.outputs.no_changes != 'true'
         run: |
+          set -euo pipefail
           new="${{ steps.ver.outputs.next }}"
           git tag -a "${new}" -m "Release ${new}" ${{ github.sha }}
           git push origin "${new}"
@@ -103,4 +107,4 @@ jobs:
         if: steps.ver.outputs.no_changes != 'true'
         run: |
           new="${{ steps.ver.outputs.next }}"
-          curl -sSfL "https://proxy.golang.org/github.com/yousef-muc/token-captcha/@v/${new}.info" >/dev/null    
+          curl -sSfL "https://proxy.golang.org/github.com/yousef-muc/token-captcha/@v/${new}.info" >/dev/null
