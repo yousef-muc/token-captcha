@@ -5,10 +5,16 @@ import (
 	"time"
 )
 
+// Service represents the main captcha generator and verifier.
+// It operates in a stateless manner, meaning that no data needs to be stored on the server.
+// The service uses an HMAC signature to verify captcha tokens without maintaining sessions.
 type Service struct {
 	cfg Config
 }
 
+// New creates a new captcha service using the provided configuration.
+// It automatically normalizes the configuration by filling in missing or invalid values
+// with secure and reasonable defaults before returning the initialized Service instance.
 func New(cfg Config) *Service {
 	normalizeConfig(&cfg)
 	return &Service{
@@ -16,6 +22,11 @@ func New(cfg Config) *Service {
 	}
 }
 
+// normalizeConfig ensures that all configuration values are properly set.
+// Missing values are replaced with secure defaults such as a default secret key,
+// default image size, and default font parameters.
+// Boolean fields (like Image or CaseSensitive) are not modified here and are expected
+// to be set explicitly by the user according to the desired behavior.
 func normalizeConfig(c *Config) {
 	if c.Secret == nil {
 		c.Secret = []byte("MY-TOKEN-SECRET")
@@ -26,9 +37,6 @@ func normalizeConfig(c *Config) {
 	if c.Expiry <= 0 {
 		c.Expiry = 2 * time.Minute
 	}
-	if !c.Image {
-		c.Image = true
-	}
 	if c.Width == 0 {
 		c.Width = 220
 	}
@@ -37,9 +45,6 @@ func normalizeConfig(c *Config) {
 	}
 	if c.Noise == 0 {
 		c.Noise = 10
-	}
-	if !c.CaseSensitive {
-		c.CaseSensitive = true
 	}
 	if c.FG == nil {
 		c.FG = color.Black
