@@ -31,45 +31,92 @@ jobs:
       - name: Calc next version
         id: ver
         run: |
+          set -euo pipefail
+
+          # Letzten Tag holen (oder Basis setzen)
           last=$(git tag --list 'v*' --sort=-v:refname | head -n1)
           if [ -z "$last" ]; then last="v0.1.0"; fi
+
+          # Commits seit letztem Tag (Subject + Body)
+          log=$(git log --pretty=format:'%s%n%b' ${last}..HEAD || true)
+
+          # Wenn keine neuen Commits → abbrechen (kein Release)
+          if [ -z "$log" ]; then
+            echo "no_changes=true" >> $GITHUB_OUTPUT
+            echo "next=${last}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Version zerlegen
           major=${last#v}; major=${major%%.*}
           minor=${last#v$major.}; minor=${minor%%.*}
           patch=${last#v$major.$minor.}
-          # Simple rule: if commit messages since last tag contain "feat:", bump minor; if "BREAKING CHANGE" bump major; else bump patch
-          log=$(git log --pretty=format:%s ${last}..HEAD || true)
-          if echo "$log" | grep -q "BREAKING CHANGE"; then
+
+          # Bump-Level bestimmen
+          bump="patch"
+
+          # MAJOR: "type!:" im Subject ODER "BREAKING CHANGE" im Body/Footers
+          if echo "$log" | grep -Eiq '^[a-z]+(\([^)]+\))?!: ' || echo "$log" | grep -Eq '(^|\n)BREAKING CHANGE'; then
+            bump="major"
+          # MINOR: feat(:|(...): )
+          elif echo "$log" | grep -Eq '^feat(\([^)]+\))?: '; then
+            bump="minor"
+          else
+            bump="patch"
+          fi
+
+          # Anwenden
+          if [ "$bump" = "major" ]; then
             major=$((major+1)); minor=0; patch=0
-          elif echo "$log" | grep -qE "feat(\(.*\))?: "; then
+          elif [ "$bump" = "minor" ]; then
             minor=$((minor+1)); patch=0
           else
             patch=$((patch+1))
           fi
+
+          echo "no_changes=false" >> $GITHUB_OUTPUT
           echo "next=v${major}.${minor}.${patch}" >> $GITHUB_OUTPUT
 
-      - name: Update README install line
+      - name: Update README install line + commit
         run: |
           new="${{ steps.ver.outputs.next }}"
-          sed -i -E "s#(go get github.com/yousef-muc/token-captcha@)v[0-9]+\.[0-9]+\.[0-9]+#\1${new}#g" README.md
+          # Ersetze sowohl konkrete Versionen als auch den Platzhalter vX.Y.Z
+          sed -i -E "s#(go get github.com/yousef-muc/token-captcha@)(v[0-9]+\.[0-9]+\.[0-9]+|vX\.Y\.Z)#\1${new}#g" README.md
+
           if ! git diff --quiet; then
-            git config user.name "github-actions"
-            git config user.email "actions@users.noreply.github.com"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add README.md
             git commit -m "docs: bump install line to ${new}"
+            git push origin HEAD
           fi
 
-      - name: Configure Git identity
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"    
+      - name: Skip if no changes
+        if: steps.ver.outputs.no_changes == 'true'
+        run: echo "No commits since last tag. Skipping release."
 
-      - name: Create tag
+      - name: Update README install line + commit
+        if: steps.ver.outputs.no_changes != 'true'
+        run: |
+          new="${{ steps.ver.outputs.next }}"
+          sed -i -E "s#(go get github.com/yousef-muc/token-captcha@)(v[0-9]+\.[0-9]+\.[0-9]+|vX\.Y\.Z)#\1${new}#g" README.md
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add README.md
+            git commit -m "docs: bump install line to ${new}"
+            git push origin HEAD
+          fi
+
+      - name: Create tag and push
+        if: steps.ver.outputs.no_changes != 'true'
         run: |
           new="${{ steps.ver.outputs.next }}"
           git tag -a "${new}" -m "Release ${new}"
           git push --follow-tags
 
       - name: Create GitHub Release
+        if: steps.ver.outputs.no_changes != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.next }}
