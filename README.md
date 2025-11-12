@@ -211,7 +211,7 @@ Verification can therefore be done by any server instance without shared state o
 ---
 
 
-## 🧾 License
+## 🧾 License 
 
 MIT License
 
