@@ -33,29 +33,29 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Letzten Tag holen (oder Basis setzen)
+          # Get the last tag (or set the basis)
           last=$(git tag --list 'v*' --sort=-v:refname | head -n1)
           if [ -z "$last" ]; then last="v0.1.0"; fi
 
-          # Commits seit letztem Tag (Subject + Body)
+          # Commits since last Tag (Subject + Body)
           log=$(git log --pretty=format:'%s%n%b' ${last}..HEAD || true)
 
-          # Wenn keine neuen Commits → abbrechen (kein Release)
+          # If no new commits -> cancel (no release)
           if [ -z "$log" ]; then
             echo "no_changes=true" >> $GITHUB_OUTPUT
             echo "next=${last}" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          # Version zerlegen
+          # break down version
           major=${last#v}; major=${major%%.*}
           minor=${last#v$major.}; minor=${minor%%.*}
           patch=${last#v$major.$minor.}
 
-          # Bump-Level bestimmen
+          # Determine bump level
           bump="patch"
 
-          # MAJOR: "type!:" im Subject ODER "BREAKING CHANGE" im Body/Footers
+          # MAJOR: "type!:" in the subject OR "BREAKING CHANGE" in the body/footers
           if echo "$log" | grep -Eiq '^[a-z]+(\([^)]+\))?!: ' || echo "$log" | grep -Eq '(^|\n)BREAKING CHANGE'; then
             bump="major"
           # MINOR: feat(:|(...): )
@@ -65,7 +65,7 @@ jobs:
             bump="patch"
           fi
 
-          # Anwenden
+          # Apply
           if [ "$bump" = "major" ]; then
             major=$((major+1)); minor=0; patch=0
           elif [ "$bump" = "minor" ]; then
@@ -80,7 +80,7 @@ jobs:
       - name: Update README install line + commit
         run: |
           new="${{ steps.ver.outputs.next }}"
-          # Ersetze sowohl konkrete Versionen als auch den Platzhalter vX.Y.Z
+          # Replace both specific versions and the placeholder vX.Y.Z.
           sed -i -E "s#(go get github.com/yousef-muc/token-captcha@)(v[0-9]+\.[0-9]+\.[0-9]+|vX\.Y\.Z)#\1${new}#g" README.md
 
           if ! git diff --quiet; then
