@@ -1,5 +1,5 @@
-# Token Captcha
-![Hero Image](./artifacts/general/img/hero.jpg)
+# token-captcha — Stateless CAPTCHA generator and verifier for Go
+![Hero Image](./artifacts/general/img/stage.png)
 
 A lightweight **stateless captcha generator and verifier** written in Go.  
 It allows frontend applications to request captchas through an API endpoint  
@@ -12,6 +12,10 @@ without any persistent storage or session handling on the server side.
 ```bash
 go get github.com/yousef-muc/token-captcha@v1.0.0
 ```
+
+[![Go Reference](https://pkg.go.dev/badge/github.com/yousef-muc/token-captcha.svg)](https://pkg.go.dev/github.com/yousef-muc/token-captcha) 
+
+**Keywords:** go captcha, stateless captcha, hmac token, image verification, ttf font captcha
 
 ## 🧠 Overview
 
@@ -40,6 +44,7 @@ and **microservices** where shared state is undesirable.
 - ⏱️ Expiry enforcement and action binding
 - 💡 Human-friendly characters (no I, O, 1, 0)
 
+![Noto Sans](./artifacts/general/img/img1.png)  ![Jetbrain Mono](./artifacts/general/img/img2.png)
 ---
 
 ## 🖥️ Example: Server-side Usage (Go)
@@ -68,6 +73,8 @@ func main() {
 		Length:        6,                   // number of captcha characters
 		Expiry:        2 * time.Minute,     // token lifetime
 		Image:         true,                // enable PNG image generation
+    Width:         220,                 // image width in pixels
+    Height:        70,                  // image height in pixels
 		CaseSensitive: false,               // ignore case during verification
 		Font: tokencaptcha.FontConfig{
 			Name: "noto-sans", // built-in font name
@@ -202,6 +209,7 @@ This library embeds all required data (nonce, expiry, action, HMAC) in the token
 Verification can therefore be done by any server instance without shared state or a database.
 
 ---
+
 
 ## 🧾 License
 
