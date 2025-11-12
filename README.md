@@ -10,7 +10,7 @@ without any persistent storage or session handling on the server side.
 
 
 ```bash
-go get github.com/yousef-muc/token-captcha@v1.0.1
+go get github.com/yousef-muc/token-captcha@v1.0.2
 ```
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/yousef-muc/token-captcha.svg)](https://pkg.go.dev/github.com/yousef-muc/token-captcha) 
