@@ -1,14 +1,9 @@
-# Releases & Versioning
-
-# **Workflow `release.yml`** triggers on merge to `main`
-# Determines the **latest tag version**, bumps **patch/minor/major** based on the commit log
-# **Updates README** replaces version in the install line
-# Commit + **push new tag** (`vX.Y.Z`) + create **GitHub release**
-
 name: Release
+
 on:
-  push:
-    branches: [ "main" ]
+  pull_request:
+    types: [closed]
+    branches: [main]
 
 permissions:
   contents: write
@@ -16,12 +11,14 @@ permissions:
 
 jobs:
   release:
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout main at merge commit
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: main
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -33,39 +30,32 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Get the last tag (or set the basis)
-          last=$(git tag --list 'v*' --sort=-v:refname | head -n1)
-          if [ -z "$last" ]; then last="v0.1.0"; fi
+          # Last tag, if any
+          last=$(git tag --list 'v*' --sort=-v:refname | head -n1 || true)
 
-          # Commits since last Tag (Subject + Body)
-          log=$(git log --pretty=format:'%s%n%b' ${last}..HEAD || true)
+          if [ -z "${last:-}" ]; then
+            log=$(git log --pretty=format:'%s%n%b' || true)
+            major=0; minor=0; patch=0
+          else
+            log=$(git log --pretty=format:'%s%n%b' "${last}..HEAD" || true)
+            major=${last#v}; major=${major%%.*}
+            minor=${last#v$major.}; minor=${minor%%.*}
+            patch=${last#v$major.$minor.}
+          fi
 
-          # If no new commits -> cancel (no release)
           if [ -z "$log" ]; then
             echo "no_changes=true" >> $GITHUB_OUTPUT
-            echo "next=${last}" >> $GITHUB_OUTPUT
+            echo "next=${last:-v0.0.0}" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          # break down version
-          major=${last#v}; major=${major%%.*}
-          minor=${last#v$major.}; minor=${minor%%.*}
-          patch=${last#v$major.$minor.}
-
-          # Determine bump level
           bump="patch"
-
-          # MAJOR: "type!:" in the subject OR "BREAKING CHANGE" in the body/footers
           if echo "$log" | grep -Eiq '^[a-z]+(\([^)]+\))?!: ' || echo "$log" | grep -Eq '(^|\n)BREAKING CHANGE'; then
             bump="major"
-          # MINOR: feat(:|(...): )
           elif echo "$log" | grep -Eq '^feat(\([^)]+\))?: '; then
             bump="minor"
-          else
-            bump="patch"
           fi
 
-          # Apply
           if [ "$bump" = "major" ]; then
             major=$((major+1)); minor=0; patch=0
           elif [ "$bump" = "minor" ]; then
@@ -77,20 +67,6 @@ jobs:
           echo "no_changes=false" >> $GITHUB_OUTPUT
           echo "next=v${major}.${minor}.${patch}" >> $GITHUB_OUTPUT
 
-      - name: Update README install line + commit
-        run: |
-          new="${{ steps.ver.outputs.next }}"
-          # Replace both specific versions and the placeholder vX.Y.Z.
-          sed -i -E "s#(go get github.com/yousef-muc/token-captcha@)(v[0-9]+\.[0-9]+\.[0-9]+|vX\.Y\.Z)#\1${new}#g" README.md
-
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add README.md
-            git commit -m "docs: bump install line to ${new}"
-            git push origin HEAD
-          fi
-
       - name: Skip if no changes
         if: steps.ver.outputs.no_changes == 'true'
         run: echo "No commits since last tag. Skipping release."
@@ -100,6 +76,7 @@ jobs:
         run: |
           new="${{ steps.ver.outputs.next }}"
           sed -i -E "s#(go get github.com/yousef-muc/token-captcha@)(v[0-9]+\.[0-9]+\.[0-9]+|vX\.Y\.Z)#\1${new}#g" README.md
+
           if ! git diff --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
