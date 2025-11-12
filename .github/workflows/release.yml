@@ -88,12 +88,17 @@ jobs:
             git push origin HEAD:refs/heads/${BASE_BRANCH}
           fi
 
-      - name: Create tag and push
+      - name: Create tag on updated base branch head and push
         if: steps.ver.outputs.no_changes != 'true'
+        env:
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }} # z.B. main
         run: |
           set -euo pipefail
           new="${{ steps.ver.outputs.next }}"
-          git tag -a "${new}" -m "Release ${new}" ${{ github.sha }}
+          git fetch origin ${BASE_BRANCH}
+          TAG_SHA=$(git rev-parse origin/${BASE_BRANCH})
+          echo "Tagging ${new} on ${TAG_SHA}"
+          git tag -a "${new}" -m "Release ${new}" "${TAG_SHA}"
           git push origin "${new}"
 
       - name: Create GitHub Release
